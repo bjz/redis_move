@@ -11,25 +11,11 @@
 
 using namespace std;
 
-class AutoLock
-{
-public:
-    pthread_mutex_t* lc;
-    AutoLock(pthread_mutex_t* lock) {
-        lc = lock;
-        pthread_mutex_lock(lc);
-    }
-    ~AutoLock() {
-        pthread_mutex_unlock(lc);
-    }
-};
-
 RedisClient::RedisClient(string ip, int port, string _passwd, int _timeout)
 {
     timeout = _timeout;
     server_port = port;
     setver_ip = ip;
-    begin_time = 0;
     _start_thread = false;
     tid = NULL;
     tid_num = 0;
@@ -97,20 +83,17 @@ redisContext* RedisClient::create_context()
         pthread_mutex_unlock(&queue_lock);
     }
 
-    time_t now = time(NULL);
-    if(now < begin_time + maxinterval) return NULL;
-
     struct timeval tv;
     tv.tv_sec = timeout / 1000;
     tv.tv_usec = (timeout % 1000) * 1000;;
     redisContext *ctx = redisConnectWithTimeout(setver_ip.c_str(), server_port, tv);
     if(ctx == NULL || ctx->err != 0)
     {
-        if(ctx != NULL) redisFree(ctx);
-
-        begin_time = time(NULL);
-        
-        return NULL;
+        if(ctx != NULL) {
+            printf("create free\n");
+            redisFree(ctx);
+            return NULL;
+        }        
     }
 
     if (passwd != "" && passwd != "-") {
@@ -131,7 +114,11 @@ redisContext* RedisClient::create_context()
 void RedisClient::release_context(redisContext *ctx, bool active)
 {
     if(ctx == NULL) return;
-    if(!active) {redisFree(ctx); return;}
+    if(!active) {
+        printf("free\n");
+        redisFree(ctx); 
+        return;
+    }
 
     pthread_mutex_lock(&queue_lock);
     clients.push(ctx);

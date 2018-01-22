@@ -48,9 +48,6 @@ private:
     pthread_mutex_t cmd_lock;
     pthread_cond_t cond;
     std::vector<string> client_cmd;
-
-    time_t begin_time;
-    static const int maxinterval = 3;
     bool _start_thread;
     pthread_t* tid;
     int tid_num;
