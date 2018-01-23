@@ -13,6 +13,7 @@ struct option opts[] = {
     {"passwd1", required_argument, NULL, 'P'},
     {"passwd2", required_argument, NULL, 'p'},
     {"threads", required_argument, NULL, 'n'},
+    {"begin", required_argument, NULL, 'b'},
     {"count", required_argument, NULL, 'c'},
     {"help",    no_argument, NULL, 'h'}
 };
@@ -61,6 +62,7 @@ void help()
         "-P --passwd2: dest redis passwd\n"
         "-n --threads: start threads num to process, default thread num is 1\n"
         "-c --count: every time return keys count, defult count is 100\n"
+        "-b --begin: scan redis from the pos, defult count is 0\n"
         "\n\n"
         "example: ./redis_move -s 192.168.1.12:1000 -d 192.168.1.133:2000 -t 1000 -n 4 -c 100 -p *** -P *** \n\n");
 }
@@ -76,12 +78,15 @@ void parse_host_port(string str, string& host, int& port){
 int main(int argc, char **argv) {
     
     int opt = 0;
-    string src_hostname, dest_hostname, passwd1, passwd2, count_str = "100";
+    string src_hostname, dest_hostname, passwd1, passwd2, count_str = "100", beginpos = "0";
     int src_port = 0, dest_port = 0;
     int timevalue = 1000, thread_num = 1, count = 100;
     bool is_help = false;
-    while ((opt = getopt_long(argc, argv, "s:d:t:P:p:n:c:h", opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "b:s:d:t:P:p:n:c:h", opts, NULL)) != -1) {
         switch (opt) {
+            case 'b':
+                beginpos = optarg;
+                break;
             case 's':
                 src_hostname = optarg;
             break;                        
@@ -123,7 +128,13 @@ int main(int argc, char **argv) {
     parse_host_port(dest_hostname, dest_hostname, dest_port);
 
     if (!check_args(src_hostname, dest_hostname, passwd1, passwd2, src_port, dest_port, timevalue, thread_num, count)) {
-        printf("please: ./redis_move -h\n");
+        printf("please: ./redis_move -h\n\n");
+        return 0;
+    }
+
+    if (atoi(beginpos.c_str()) < 0) {
+        printf("\nerror: begin pos must > 0\n");
+        printf("please: ./redis_move -h\n\n");
         return 0;
     }
     
@@ -132,13 +143,10 @@ int main(int argc, char **argv) {
     dest_client->start_do_cmd(thread_num, true);
     src_client->start_do_cmd(1, false);
     src_client->print_time();
- 
-    std::string rp = "";
-    while (rp != "0") {
+
+    std::string rp = beginpos;
+    do {
         usleep(timevalue);
-        if (rp == "") {
-            rp = "0";
-        }
         
         std::vector<std::string> keys;
         std::string cmd = "SCAN " + rp + " COUNT " + count_str;
@@ -200,7 +208,7 @@ int main(int argc, char **argv) {
 
             }
         }        
-    }
+    } while (rp != "0");
 
 failed:    
     dest_client->stop_do_cmd();
