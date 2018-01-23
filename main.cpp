@@ -9,8 +9,6 @@
 struct option opts[] = {
     {"host1", required_argument, NULL, 's'},
     {"host2", required_argument, NULL, 'd'},
-    {"port1", required_argument, NULL, 'S'},
-    {"port2", required_argument, NULL, 'D'},
     {"time",  required_argument, NULL, 't'},
     {"passwd1", required_argument, NULL, 'P'},
     {"passwd2", required_argument, NULL, 'p'},
@@ -57,8 +55,6 @@ void help()
     printf("option:\n\n"
         "-s --host1: source redis host\n"
         "-d --host2: dest redis host\n"
-        "-S --port1: source redis port\n"
-        "-D --port2: dest redis port\n"
         "-t --time: interval time(us), defult 1000us\n"
         "-h --help: option help\n"
         "-p --passwd1: source redis passwd\n"
@@ -66,7 +62,15 @@ void help()
         "-n --threads: start threads num to process, default thread num is 1\n"
         "-c --count: every time return keys count, defult count is 100\n"
         "\n\n"
-        "example: ./redis_move -s 192.168.1.12 -S 1000 -d 192.168.1.133 -D 2000 -t 1000 -n 4 -c 100 -p *** -P *** \n\n");
+        "example: ./redis_move -s 192.168.1.12:1000 -d 192.168.1.133:2000 -t 1000 -n 4 -c 100 -p *** -P *** \n\n");
+}
+
+void parse_host_port(string str, string& host, int& port){
+    size_t pos = string::npos;
+    if ((pos = str.find(":")) != string::npos) {
+        host = str.substr(0, pos);
+        port = atoi(str.substr(pos + 1).c_str());
+    }
 }
 
 int main(int argc, char **argv) {
@@ -76,23 +80,18 @@ int main(int argc, char **argv) {
     int src_port = 0, dest_port = 0;
     int timevalue = 1000, thread_num = 1, count = 100;
     bool is_help = false;
-    while ((opt = getopt_long(argc, argv, "s:d:S:D:t:P:p:n:c:h", opts, NULL)) != -1) {
+    while ((opt = getopt_long(argc, argv, "s:d:t:P:p:n:c:h", opts, NULL)) != -1) {
         switch (opt) {
             case 's':
                 src_hostname = optarg;
             break;                        
+            case 'd':
+                dest_hostname = optarg;
+            break;
             case 'c':
                 count = atoi(optarg);
                 count_str = optarg;
             break;            
-            case 'd':
-                dest_hostname = optarg;
-            break;
-            case 'S':
-                src_port = atoi(optarg);
-            break;
-            case 'D':
-                dest_port = atoi(optarg);
             break;
             case 't':
                 timevalue = atoi(optarg);
@@ -119,6 +118,9 @@ int main(int argc, char **argv) {
         help();
         return 0;
     }
+
+    parse_host_port(src_hostname, src_hostname, src_port);
+    parse_host_port(dest_hostname, dest_hostname, dest_port);
 
     if (!check_args(src_hostname, dest_hostname, passwd1, passwd2, src_port, dest_port, timevalue, thread_num, count)) {
         printf("please: ./redis_move -h\n");
