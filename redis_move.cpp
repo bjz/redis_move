@@ -42,10 +42,6 @@ RedisClient::~RedisClient()
 
 int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<std::string>* keys, int* intera)
 {
-    if (!_start_thread) {
-        printf("thread not start\n");
-        return REDIS_REPLY_ERROR;
-    }
     redisReply *reply = exec_cmd(index, cmd);
     if (!reply) {
         printf("error: reply is null\n");
@@ -60,10 +56,6 @@ int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<
 
 redisReply* RedisClient::exec_cmd(int index, const string cmd)
 {    
-    if (!_start_thread) {
-        printf("thread not start\n");
-        return NULL;
-    }
     redisContext *ctx = clients[index];
     if(ctx == NULL) return NULL;
 
@@ -222,6 +214,11 @@ void RedisClient::start_do_cmd(int num, bool is_dest)
 
 void RedisClient::stop_do_cmd()
 {
+    while (!client_cmd.empty()) {
+        printf("cmd=%d\n", client_cmd.size());
+        pthread_cond_signal(&cond);
+        sleep(1);
+    }
     _start_thread = false;
     pthread_cond_signal(&cond);
     for (int i = 0; i < tid_num; i++) {
@@ -240,11 +237,15 @@ void* RedisClient::thread_do_cmd(void* arg)
     RedisClient* client = (RedisClient*)arg;    
     redisContext* context = client->clients[index -1];
     vector<string>& client_cmd =  client->client_cmd;
-    while (client->_start_thread) {
+    while (client->_start_thread || !client_cmd.empty()) {
         pthread_mutex_lock(&client->cmd_lock);
         pthread_cond_wait(&client->cond, &client->cmd_lock);
-        vector<string> q = client_cmd;
-        if (!q.empty()) {
+        vector<string> q;
+        if (client_cmd.size() > 10) {
+            q.assign(client_cmd.begin(), client_cmd.begin() + 10);
+            client_cmd.erase(client_cmd.begin(), client_cmd.begin() + 10);
+        } else {
+            q.assign(client_cmd.begin(), client_cmd.end());
             client_cmd.clear();
         }
         pthread_mutex_unlock(&client->cmd_lock);
