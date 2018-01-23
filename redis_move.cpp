@@ -20,23 +20,19 @@ RedisClient::RedisClient(string ip, int port, string _passwd, int _timeout)
     tid = NULL;
     tid_num = 0;
     passwd = _passwd;
-    
-    pthread_mutex_init(&queue_lock, NULL);
     pthread_mutex_init(&cmd_lock, NULL);
     pthread_cond_init(&cond, NULL);
 }
 
 RedisClient::~RedisClient()
 {
-    pthread_mutex_lock(&queue_lock);
-    while(!clients.empty())
-    {
-        redisContext *ctx = clients.front();
+    stop_do_cmd();
+
+    for (int i = 0; i < tid_num; i++) {
+        redisContext *ctx = clients[i];
         redisFree(ctx);
-        clients.pop();
     }
-    pthread_mutex_unlock(&queue_lock);
-    pthread_mutex_destroy(&queue_lock);
+    clients.clear();
     
     pthread_mutex_lock(&cmd_lock);
     pthread_mutex_unlock(&cmd_lock);
@@ -44,9 +40,13 @@ RedisClient::~RedisClient()
     pthread_cond_destroy(&cond);
 }
 
-int RedisClient::exec_cmd(const string cmd, string* response, vector<std::string>* keys, int* intera)
+int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<std::string>* keys, int* intera)
 {
-    redisReply *reply = exec_cmd(cmd);
+    if (!_start_thread) {
+        printf("thread not start\n");
+        return REDIS_REPLY_ERROR;
+    }
+    redisReply *reply = exec_cmd(index, cmd);
     if (!reply) {
         printf("error: reply is null\n");
         return REDIS_REPLY_ERROR;
@@ -58,34 +58,25 @@ int RedisClient::exec_cmd(const string cmd, string* response, vector<std::string
     return type;
 }
 
-redisReply* RedisClient::exec_cmd(const string cmd)
-{
-    redisContext *ctx = create_context();
+redisReply* RedisClient::exec_cmd(int index, const string cmd)
+{    
+    if (!_start_thread) {
+        printf("thread not start\n");
+        return NULL;
+    }
+    redisContext *ctx = clients[index];
     if(ctx == NULL) return NULL;
 
     redisReply *reply = (redisReply*)redisCommand(ctx, cmd.c_str());
-
-    release_context(ctx, reply != NULL);
 
     return reply;
 }
 
 redisContext* RedisClient::create_context()
 {
-    {
-        pthread_mutex_lock(&queue_lock);
-        if(!clients.empty()) {
-            redisContext *ctx = clients.front();
-            clients.pop();
-            pthread_mutex_unlock(&queue_lock);
-            return ctx;
-        }
-        pthread_mutex_unlock(&queue_lock);
-    }
-
     struct timeval tv;
     tv.tv_sec = timeout / 1000;
-    tv.tv_usec = (timeout % 1000) * 1000;;
+    tv.tv_usec = (timeout % 1000) * 1000;
     redisContext *ctx = redisConnectWithTimeout(setver_ip.c_str(), server_port, tv);
     if(ctx == NULL || ctx->err != 0)
     {
@@ -105,24 +96,9 @@ redisContext* RedisClient::create_context()
             printf("error: passwd failed, repons=%s\n", rep.c_str());
             exit(0);
         }
-        release_context(ctx, reply != NULL);
     }
 
     return ctx;
-}
-
-void RedisClient::release_context(redisContext *ctx, bool active)
-{
-    if(ctx == NULL) return;
-    if(!active) {
-        printf("free\n");
-        redisFree(ctx); 
-        return;
-    }
-
-    pthread_mutex_lock(&queue_lock);
-    clients.push(ctx);
-    pthread_mutex_unlock(&queue_lock);
 }
 
 bool RedisClient::check_status(redisContext *ctx)
@@ -220,16 +196,28 @@ string RedisClient::get_str(char* data, int len)
     return ss;
 }
 
-void RedisClient::start_do_cmd(int num)
+void RedisClient::start_do_cmd(int num, bool is_dest)
 {
-    tid = new pthread_t[num];
-    _start_thread = true;
+    _start_thread = true;    
     tid_num = num;
+    for (int i = 0; i< num; i++) {
+        clients[i] = create_context();
+        if (clients[i] == NULL) {
+            printf("create context failed\n");
+            exit(0);
+        }
+    }
+
+    if (!is_dest) {
+        return ;
+    }
+    
+    tid = new pthread_t[num];
     for (int i = 0; i < tid_num; i++) {
         if (pthread_create(&tid[i], NULL, thread_do_cmd, this) == -1) {
             printf("pthread tid=%d create failed\n", tid[i]);
         }
-    }
+    }   
 }
 
 void RedisClient::stop_do_cmd()
@@ -245,7 +233,11 @@ void RedisClient::stop_do_cmd()
 
 void* RedisClient::thread_do_cmd(void* arg)
 {
-    RedisClient* client = (RedisClient*)arg;
+    static int thread_index = 0;
+    thread_index++;
+
+    RedisClient* client = (RedisClient*)arg;    
+    redisContext* context = client->clients[thread_index -1];
     vector<string>& client_cmd =  client->client_cmd;
     while (client->_start_thread) {
         pthread_mutex_lock(&client->cmd_lock);
@@ -260,7 +252,8 @@ void* RedisClient::thread_do_cmd(void* arg)
             string cmd = q[i];
             if (cmd != "") {
                 string resp;
-                if (REDIS_REPLY_ERROR == client->exec_cmd(cmd, &resp, NULL, NULL)) {
+                int type = client->exec_cmd(thread_index - 1, cmd, &resp, NULL, NULL);
+                if (REDIS_REPLY_STRING != type && type != REDIS_REPLY_INTEGER && type != REDIS_REPLY_STATUS) {
                     printf("client cmd=%s, respond=%s failed\n", cmd.c_str(), resp.c_str());
                 }
                 //printf("client cmd=%s, respond=%s successed\n", cmd.c_str(), resp.c_str());

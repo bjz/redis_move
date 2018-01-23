@@ -5,6 +5,7 @@
 #include <queue>
 #include <time.h>
 #include <pthread.h>
+#include <map>
 
 #define REDIS_REPLY_STRING 1    // //返回字符串，查看str,len字段
 #define REDIS_REPLY_ARRAY 2     //返回一个数组，查看elements的值（数组个数），通过element[index]的方式访问数组元素，每个数组元素是一个redisReply对象的指针
@@ -24,15 +25,14 @@ public:
     RedisClient(string ip, int port, string _passed, int timeout = 2000);
     virtual ~RedisClient();
 public:
-    int exec_cmd(const string cmd, string* response, vector<string>* keys, int* intera);
-    redisReply* exec_cmd(const string cmd);
+    int exec_cmd(int index, const string cmd, string* response, vector<string>* keys, int* intera);
+    redisReply* exec_cmd(int index, const string cmd);
     void print_time();
     void push_cmd(string cmd);
-    void start_do_cmd(int num);    
+    void start_do_cmd(int num, bool is_dest);    
     void stop_do_cmd();
 private:
     redisContext* create_context();
-    void release_context(redisContext *ctx, bool active);
     bool check_status(redisContext *ctx);
     void parse_reply(redisReply* reply, bool is_first, 
         std::string* rp, std::vector<std::string>* keys, int* integer);
@@ -42,16 +42,14 @@ private:
     int timeout;
     int server_port;
     string setver_ip;
-    
-    pthread_mutex_t queue_lock;
-    std::queue<redisContext*> clients;
+
+    std::map<int, redisContext*> clients;
     pthread_mutex_t cmd_lock;
     pthread_cond_t cond;
     std::vector<string> client_cmd;
     bool _start_thread;
     pthread_t* tid;
     int tid_num;
-
     string passwd;
 };
 

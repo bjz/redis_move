@@ -125,9 +125,10 @@ int main(int argc, char **argv) {
         return 0;
     }
     
-    RedisClient *src_client = new RedisClient(src_hostname, src_port, passwd1, 3000);// time is 3s    
-    RedisClient *dest_client = new RedisClient(dest_hostname, dest_port, passwd2, 3000);// time is 3s
-    dest_client->start_do_cmd(thread_num);
+    RedisClient *src_client = new RedisClient(src_hostname, src_port, passwd1, 10000);// time is 10s    
+    RedisClient *dest_client = new RedisClient(dest_hostname, dest_port, passwd2, 10000);// time is 10s
+    dest_client->start_do_cmd(thread_num, true);
+    src_client->start_do_cmd(1, false);
     src_client->print_time();
  
     std::string rp = "";
@@ -140,7 +141,7 @@ int main(int argc, char **argv) {
         std::vector<std::string> keys;
         std::string cmd = "SCAN " + rp + " COUNT " + count_str;
         printf("str=%s\n", cmd.c_str());
-        if (REDIS_REPLY_ERROR == src_client->exec_cmd(cmd, &rp, &keys, NULL)) {//get all keys
+        if (REDIS_REPLY_ARRAY != src_client->exec_cmd(0, cmd, &rp, &keys, NULL)) {//get all keys
             printf("error=%s, cmd=%s\n", rp.c_str(), cmd.c_str());
             goto failed;
         }
@@ -151,12 +152,7 @@ int main(int argc, char **argv) {
             string respond = "";
             string key = keys[i];
             cmd = "TYPE " + key;
-            if ((type = src_client->exec_cmd(cmd, &respond, NULL, NULL)) == REDIS_REPLY_ERROR) {
-                printf("error=%s, cmd=%s\n", respond.c_str(), cmd.c_str());
-                continue;
-            }
-
-            if (type != REDIS_REPLY_STATUS) {
+            if ((type = src_client->exec_cmd(0, cmd, &respond, NULL, NULL)) != REDIS_REPLY_STATUS) {
                 printf("error=%s, cmd=%s\n", respond.c_str(), cmd.c_str());
                 continue;
             }
@@ -173,7 +169,7 @@ int main(int argc, char **argv) {
                     //printf("str=%s\n", cmd.c_str());
                     vector<string> members;
                     printf("set rq=%s\n", rq.c_str());
-                    if (REDIS_REPLY_ERROR ==src_client->exec_cmd(cmd, &rq, &members, NULL)) {
+                    if (REDIS_REPLY_ARRAY !=src_client->exec_cmd(0, cmd, &rq, &members, NULL)) {
                         printf("error=%s, cmd=%s\n", rq.c_str(), cmd.c_str());
                         continue;
                     }
@@ -186,7 +182,7 @@ int main(int argc, char **argv) {
             } else if (respond == "string") {
                 cmd = "GET " + key;
                 string value;
-                if (REDIS_REPLY_ERROR == src_client->exec_cmd(cmd, &value, NULL, NULL)) {
+                if (REDIS_REPLY_STRING != src_client->exec_cmd(0, cmd, &value, NULL, NULL)) {
                     printf("error=%s, cmd=%s\n", value.c_str(), cmd.c_str());
                     continue;
                 }
