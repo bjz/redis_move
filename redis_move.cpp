@@ -235,9 +235,10 @@ void* RedisClient::thread_do_cmd(void* arg)
 {
     static int thread_index = 0;
     thread_index++;
-
+    
+    int index = thread_index;
     RedisClient* client = (RedisClient*)arg;    
-    redisContext* context = client->clients[thread_index -1];
+    redisContext* context = client->clients[index -1];
     vector<string>& client_cmd =  client->client_cmd;
     while (client->_start_thread) {
         pthread_mutex_lock(&client->cmd_lock);
@@ -252,7 +253,7 @@ void* RedisClient::thread_do_cmd(void* arg)
             string cmd = q[i];
             if (cmd != "") {
                 string resp;
-                int type = client->exec_cmd(thread_index - 1, cmd, &resp, NULL, NULL);
+                int type = client->exec_cmd(index - 1, cmd, &resp, NULL, NULL);
                 if (REDIS_REPLY_STRING != type && type != REDIS_REPLY_INTEGER && type != REDIS_REPLY_STATUS) {
                     printf("client cmd=%s, respond=%s failed\n", cmd.c_str(), resp.c_str());
                 }
