@@ -212,10 +212,9 @@ int main(int argc, char **argv) {
 
 failed:    
     dest_client->stop_do_cmd();
-    
     src_client->print_time();
     printf("total_cmd_num=%d\n", dest_client->total_cmd_num);
-    return 0;
+    pthread_exit(0);
 }
 
 

@@ -241,20 +241,22 @@ void* RedisClient::thread_do_cmd(void* arg)
     RedisClient* client = (RedisClient*)arg;    
     redisContext* context = client->clients[index -1];
     vector<string>& client_cmd =  client->client_cmd;
+    vector<string> q;
     while (client->_start_thread) {
         pthread_mutex_lock(&client->cmd_lock);
         pthread_cond_wait(&client->cond, &client->cmd_lock);
-        vector<string> q;
         if (client_cmd.size() > 50) {
             q.assign(client_cmd.begin(), client_cmd.begin() + 50);
             client_cmd.erase(client_cmd.begin(), client_cmd.begin() + 50);
         } else {
+            //q = client_cmd;
             q.assign(client_cmd.begin(), client_cmd.end());
             client_cmd.clear();
         }
         pthread_mutex_unlock(&client->cmd_lock);
 
-        for (size_t i = 0; i < q.size(); i++) {
+        
+        for (int i = 0; i < q.size(); i++) {                        
             string cmd = q[i];
             if (cmd != "") {
                 string resp;
@@ -265,6 +267,8 @@ void* RedisClient::thread_do_cmd(void* arg)
                 //printf("client cmd=%s, respond=%s successed\n", cmd.c_str(), resp.c_str());
             }
         }
+        
+        q.clear();
     }
     pthread_detach(pthread_self());
     printf("thread[%d] run end\n", pthread_self());
