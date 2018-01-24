@@ -216,20 +216,22 @@ void RedisClient::stop_do_cmd()
 {
     while (!client_cmd.empty()) {
         printf("cmd=%d\n", client_cmd.size());
+        usleep(1000);
         pthread_cond_signal(&cond);
-        sleep(1);
     }
     _start_thread = false;
     pthread_cond_signal(&cond);
-    for (int i = 0; i < tid_num; i++) {
-        if (pthread_join(tid[i], NULL) != 0) {
+    //for (int i = 0; i < tid_num; i++) {
+        /*if (pthread_join(tid[i], NULL) != 0) {
             printf("pthread tid=%d join failed\n", tid[i]);
-        }
-    }
+        }*/
+        //pthread_detach(tid[i]);
+    //}
 }
 
 void* RedisClient::thread_do_cmd(void* arg)
 {
+    printf("thread[%d] run start\n", pthread_self());
     static int thread_index = 0;
     thread_index++;
     
@@ -237,13 +239,13 @@ void* RedisClient::thread_do_cmd(void* arg)
     RedisClient* client = (RedisClient*)arg;    
     redisContext* context = client->clients[index -1];
     vector<string>& client_cmd =  client->client_cmd;
-    while (client->_start_thread || !client_cmd.empty()) {
+    while (client->_start_thread) {
         pthread_mutex_lock(&client->cmd_lock);
         pthread_cond_wait(&client->cond, &client->cmd_lock);
         vector<string> q;
-        if (client_cmd.size() > 10) {
-            q.assign(client_cmd.begin(), client_cmd.begin() + 10);
-            client_cmd.erase(client_cmd.begin(), client_cmd.begin() + 10);
+        if (client_cmd.size() > 50) {
+            q.assign(client_cmd.begin(), client_cmd.begin() + 50);
+            client_cmd.erase(client_cmd.begin(), client_cmd.begin() + 50);
         } else {
             q.assign(client_cmd.begin(), client_cmd.end());
             client_cmd.clear();
@@ -262,6 +264,8 @@ void* RedisClient::thread_do_cmd(void* arg)
             }
         }
     }
+    pthread_detach(pthread_self());
+    printf("thread[%d] run end\n", pthread_self());
 }
 
 
