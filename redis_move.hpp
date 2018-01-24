@@ -6,6 +6,7 @@
 #include <time.h>
 #include <pthread.h>
 #include <map>
+#include <stdint.h>
 
 #define REDIS_REPLY_STRING 1    // //返回字符串，查看str,len字段
 #define REDIS_REPLY_ARRAY 2     //返回一个数组，查看elements的值（数组个数），通过element[index]的方式访问数组元素，每个数组元素是一个redisReply对象的指针
@@ -52,7 +53,7 @@ private:
     int tid_num;
     string passwd;
 public:
-    int total_cmd_num;
+    int64_t total_cmd_num;
 };
 
 #endif // REDIS_MOVE_HPP

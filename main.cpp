@@ -213,7 +213,7 @@ int main(int argc, char **argv) {
 failed:    
     dest_client->stop_do_cmd();
     src_client->print_time();
-    printf("total_cmd_num=%d\n", dest_client->total_cmd_num);
+    printf("total_cmd_num=%I64d\n", dest_client->total_cmd_num);
     pthread_exit(0);
 }
 
