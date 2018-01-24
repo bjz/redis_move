@@ -51,6 +51,8 @@ private:
     pthread_t* tid;
     int tid_num;
     string passwd;
+public:
+    int total_cmd_num;
 };
 
 #endif // REDIS_MOVE_HPP

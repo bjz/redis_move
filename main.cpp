@@ -155,7 +155,7 @@ int main(int argc, char **argv) {
             printf("error=%s, cmd=%s\n", rp.c_str(), cmd.c_str());
             goto failed;
         }
-        printf("keys rp=%s\n", rp.c_str());
+        printf("keys rp=%s, vector size=%d\n", rp.c_str(), keys.size());
 
         for (int i = 0; i < keys.size(); i++) {
             int type = -1;
@@ -197,7 +197,7 @@ int main(int argc, char **argv) {
                     continue;
                 }
                 string set_cmd = "SET " + key + " " + value;
-                dest_client->push_cmd(set_cmd);
+                dest_client->push_cmd(set_cmd);                
             } else if (respond == "hash") {
 
             } else if (respond == "list") {
@@ -214,6 +214,7 @@ failed:
     dest_client->stop_do_cmd();
     
     src_client->print_time();
+    printf("total_cmd_num=%d\n", dest_client->total_cmd_num);
     return 0;
 }
 

@@ -19,6 +19,7 @@ RedisClient::RedisClient(string ip, int port, string _passwd, int _timeout)
     _start_thread = false;
     tid = NULL;
     tid_num = 0;
+    total_cmd_num = 0;
     passwd = _passwd;
     pthread_mutex_init(&cmd_lock, NULL);
     pthread_cond_init(&cond, NULL);
@@ -55,7 +56,7 @@ int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<
 }
 
 redisReply* RedisClient::exec_cmd(int index, const string cmd)
-{    
+{
     redisContext *ctx = clients[index];
     if(ctx == NULL) return NULL;
 
@@ -107,6 +108,7 @@ bool RedisClient::check_status(redisContext *ctx)
 
 void RedisClient::push_cmd(string cmd)
 {
+    total_cmd_num++;
     pthread_mutex_lock(&cmd_lock);
     client_cmd.push_back(cmd);
     pthread_mutex_unlock(&cmd_lock);    
@@ -216,7 +218,7 @@ void RedisClient::stop_do_cmd()
 {
     while (!client_cmd.empty()) {
         printf("cmd=%d\n", client_cmd.size());
-        usleep(1000);
+        usleep(500);
         pthread_cond_signal(&cond);
     }
     _start_thread = false;
