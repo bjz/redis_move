@@ -54,6 +54,7 @@ private:
     string passwd;
 public:
     int64_t total_cmd_num;
+    std::map<pthread_t, bool> thread_state;
 };
 
 #endif // REDIS_MOVE_HPP

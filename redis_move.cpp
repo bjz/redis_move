@@ -210,6 +210,8 @@ void RedisClient::start_do_cmd(int num, bool is_dest)
     for (int i = 0; i < tid_num; i++) {
         if (pthread_create(&tid[i], NULL, thread_do_cmd, this) == -1) {
             printf("pthread tid=%d create failed\n", tid[i]);
+        } else {
+            thread_state[tid[i]] = true;
         }
     }   
 }
@@ -222,18 +224,19 @@ void RedisClient::stop_do_cmd()
         pthread_cond_signal(&cond);
     }
     _start_thread = false;
-    pthread_cond_signal(&cond);
-    //for (int i = 0; i < tid_num; i++) {
-        /*if (pthread_join(tid[i], NULL) != 0) {
-            printf("pthread tid=%d join failed\n", tid[i]);
-        }*/
-        //pthread_detach(tid[i]);
-    //}
+
+    for (std::map<pthread_t, bool>::iterator it = thread_state.begin(); it != thread_state.end(); it++) {
+        while (it->second) {
+            usleep(500);
+            pthread_cond_signal(&cond);
+        }
+    }
 }
 
 void* RedisClient::thread_do_cmd(void* arg)
 {
     printf("thread[%d] run start\n", pthread_self());
+    pthread_detach(pthread_self());
     static int thread_index = 0;
     thread_index++;
     
@@ -270,7 +273,7 @@ void* RedisClient::thread_do_cmd(void* arg)
         
         q.clear();
     }
-    pthread_detach(pthread_self());
+    client->thread_state[pthread_self()] = false;
     printf("thread[%d] run end\n", pthread_self());
 }
 
