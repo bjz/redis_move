@@ -140,8 +140,12 @@ int main(int argc, char **argv) {
     
     RedisClient *src_client = new RedisClient(src_hostname, src_port, passwd1, 10000);// time is 10s    
     RedisClient *dest_client = new RedisClient(dest_hostname, dest_port, passwd2, 10000);// time is 10s
-    dest_client->start_do_cmd(thread_num, true);
-    src_client->start_do_cmd(1, false);
+    Client client;
+    client.client1 = src_client;
+    client.client2 = dest_client;
+    
+    src_client->start_do_cmd(thread_num, false, &client);    
+    dest_client->start_do_cmd(thread_num, true, NULL);
     src_client->print_time();
 
     std::string rp = beginpos;
@@ -157,7 +161,9 @@ int main(int argc, char **argv) {
         }
         printf("keys rp=%s, vector size=%d\n", rp.c_str(), keys.size());
 
-        for (int i = 0; i < keys.size(); i++) {
+        src_client->push_key(keys);
+
+/*        for (int i = 0; i < keys.size(); i++) {
             int type = -1;
             string respond = "";
             string key = keys[i];
@@ -207,13 +213,15 @@ int main(int argc, char **argv) {
             } else {
 
             }
-        }        
+        } */       
+        
     } while (rp != "0");
 
 failed:    
     dest_client->stop_do_cmd();
-    src_client->print_time();
-    printf("total_cmd_num=%I64d\n", dest_client->total_cmd_num);
+    src_client->stop_do_cmd();
+    src_client->print_time();    
+    printf("total_cmd_num=%lld, keys=%lld\n", dest_client->total_cmd_num, src_client->total_keys_num);
     pthread_exit(0);
 }
 

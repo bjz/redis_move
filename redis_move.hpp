@@ -19,6 +19,13 @@ struct redisReply;
 struct redisContext;
 
 using namespace std;
+class RedisClient;
+
+struct Client
+{
+    RedisClient* client1;
+    RedisClient* client2;
+};
 
 class RedisClient
 {
@@ -30,8 +37,9 @@ public:
     redisReply* exec_cmd(int index, const string cmd);
     void print_time();
     void push_cmd(string cmd);
-    void start_do_cmd(int num, bool is_dest);    
-    void stop_do_cmd();
+    void start_do_cmd(int num, bool is_dest, Client* client);    
+    void stop_do_cmd();    
+    void push_key(std::vector<string> keys_v);
 private:
     redisContext* create_context();
     bool check_status(redisContext *ctx);
@@ -39,6 +47,7 @@ private:
         std::string* rp, std::vector<std::string>* keys, int* integer);
     string get_str(char* data, int len);
     static void* thread_do_cmd(void* arg);
+    static void* thread_parse_key(void* arg);
 private:
     int timeout;
     int server_port;
@@ -52,9 +61,14 @@ private:
     pthread_t* tid;
     int tid_num;
     string passwd;
+
+    pthread_mutex_t keys_lock;
+    pthread_cond_t keys_cond;
+    std::vector<std::vector<string> > all_keys;
 public:
     int64_t total_cmd_num;
-    std::map<pthread_t, bool> thread_state;
+    int64_t total_keys_num;
+    std::map<pthread_t, bool> thread_state;    
 };
 
 #endif // REDIS_MOVE_HPP

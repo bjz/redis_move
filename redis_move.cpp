@@ -20,9 +20,13 @@ RedisClient::RedisClient(string ip, int port, string _passwd, int _timeout)
     tid = NULL;
     tid_num = 0;
     total_cmd_num = 0;
+    total_keys_num = 0;
     passwd = _passwd;
     pthread_mutex_init(&cmd_lock, NULL);
     pthread_cond_init(&cond, NULL);
+
+    pthread_mutex_init(&keys_lock, NULL);
+    pthread_cond_init(&keys_cond, NULL);
 }
 
 RedisClient::~RedisClient()
@@ -39,6 +43,9 @@ RedisClient::~RedisClient()
     pthread_mutex_unlock(&cmd_lock);
     pthread_mutex_destroy(&cmd_lock);
     pthread_cond_destroy(&cond);
+
+    pthread_mutex_destroy(&keys_lock);
+    pthread_cond_destroy(&keys_cond);
 }
 
 int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<std::string>* keys, int* intera)
@@ -108,11 +115,20 @@ bool RedisClient::check_status(redisContext *ctx)
 
 void RedisClient::push_cmd(string cmd)
 {
-    total_cmd_num++;
     pthread_mutex_lock(&cmd_lock);
+    total_cmd_num++;
     client_cmd.push_back(cmd);
     pthread_mutex_unlock(&cmd_lock);    
     pthread_cond_signal(&cond);
+}
+
+void RedisClient::push_key(std::vector<string> keys_v)
+{
+    pthread_mutex_lock(&keys_lock);
+    all_keys.push_back(keys_v);
+    total_keys_num += keys_v.size();
+    pthread_mutex_unlock(&keys_lock);
+    pthread_cond_signal(&keys_cond);
 }
 
 void RedisClient::print_time()
@@ -190,25 +206,27 @@ string RedisClient::get_str(char* data, int len)
     return ss;
 }
 
-void RedisClient::start_do_cmd(int num, bool is_dest)
+void RedisClient::start_do_cmd(int num, bool is_dest, Client* client)
 {
-    _start_thread = true;    
-    tid_num = num;
-    for (int i = 0; i< num; i++) {
+    _start_thread = true;
+    if (is_dest) {
+        tid_num = num;
+    } else {
+        tid_num = num + 1;
+    }
+            
+    for (int i = 0; i< tid_num; i++) {
         clients[i] = create_context();
         if (clients[i] == NULL) {
             printf("create context failed\n");
             exit(0);
         }
     }
-
-    if (!is_dest) {
-        return ;
-    }
     
     tid = new pthread_t[num];
-    for (int i = 0; i < tid_num; i++) {
-        if (pthread_create(&tid[i], NULL, thread_do_cmd, this) == -1) {
+    for (int i = 0; i < num; i++) {
+        if (pthread_create(&tid[i], NULL, 
+            (is_dest ? thread_do_cmd : thread_parse_key), (is_dest ? (void*)this : (void*)client)) == -1) {
             printf("pthread tid=%d create failed\n", tid[i]);
         } else {
             thread_state[tid[i]] = true;
@@ -218,10 +236,11 @@ void RedisClient::start_do_cmd(int num, bool is_dest)
 
 void RedisClient::stop_do_cmd()
 {
-    while (!client_cmd.empty()) {
-        printf("cmd=%d\n", client_cmd.size());
+    while ((!client_cmd.empty()) || (!all_keys.empty())) {
+        printf("cmd=%d, all_keys=%d\n", client_cmd.size(), all_keys.size());
         usleep(500);
-        pthread_cond_signal(&cond);
+        pthread_cond_signal(&keys_cond);
+        pthread_cond_signal(&cond);        
     }
     _start_thread = false;
 
@@ -229,20 +248,108 @@ void RedisClient::stop_do_cmd()
         while (it->second) {
             usleep(500);
             pthread_cond_signal(&cond);
+            pthread_cond_signal(&keys_cond);
         }
     }
+    
+    pthread_cond_signal(&keys_cond);
+    pthread_cond_signal(&cond);    
+}
+
+void* RedisClient::thread_parse_key(void* arg)
+{
+    printf("parse thread[%d] run start\n", pthread_self());
+    pthread_detach(pthread_self());
+
+    Client* client_all = (Client*)arg;
+    RedisClient* src_client = client_all->client1;    
+    RedisClient* dest_client = client_all->client2;
+    
+    pthread_mutex_lock(&src_client->keys_lock);
+    static int parse_thread_index = 0;
+    parse_thread_index++;
+    pthread_mutex_unlock(&src_client->keys_lock);
+    int index = parse_thread_index;
+    
+    while (src_client->_start_thread) {
+        pthread_mutex_lock(&src_client->keys_lock);
+        pthread_cond_wait(&src_client->keys_cond, &src_client->keys_lock);
+        std::vector<string> keys_v;
+        if (!src_client->all_keys.empty()) {
+            keys_v = src_client->all_keys[0];
+            src_client->all_keys.erase(src_client->all_keys.begin());
+        }
+        pthread_mutex_unlock(&src_client->keys_lock);
+        
+        for (int i = 0; i < keys_v.size(); i++) {
+            int type = -1;
+            string respond = "";
+            string key = keys_v[i];
+            string cmd = "TYPE " + key;
+            if ((type = src_client->exec_cmd(index, cmd, &respond, NULL, NULL)) != REDIS_REPLY_STATUS) {
+                printf("error=%s, cmd=%s\n", respond.c_str(), cmd.c_str());
+                continue;
+            }
+            
+            if (respond == "set") {
+                //cmd = "SMEMBERS " + key;//usr sscan replace smembers
+                string rq = "";
+                while (rq != "0") {
+                    if (rq == "") {
+                        rq = "0";
+                    }
+                    cmd = "SSCAN " + key + " " + rq + " COUNT 100";
+                    //printf("sscan str=%s\n", cmd.c_str());
+                    vector<string> members;
+                    printf("set rq=%s\n", rq.c_str());
+                    if (REDIS_REPLY_ARRAY !=src_client->exec_cmd(index, cmd, &rq, &members, NULL)) {
+                        printf("error=%s, cmd=%s\n", rq.c_str(), cmd.c_str());
+                        continue;
+                    }
+                    for (int i = 0; i < members.size(); i++) {
+                        std::string value = members[i];
+                        string set_cmd = "SADD " + key + " " + value;
+                        dest_client->push_cmd(set_cmd);
+                    }
+                }
+            } else if (respond == "string") {
+                cmd = "GET " + key;
+                string value;
+                if (REDIS_REPLY_STRING != src_client->exec_cmd(index, cmd, &value, NULL, NULL)) {
+                    printf("error=%s, cmd=%s\n", value.c_str(), cmd.c_str());
+                    continue;
+                }
+                string set_cmd = "SET " + key + " " + value;
+                dest_client->push_cmd(set_cmd);
+            } else if (respond == "hash") {
+
+            } else if (respond == "list") {
+
+            } else if (respond == "zset") {
+
+            } else {
+
+            }
+        }        
+    }
+
+    src_client->thread_state[pthread_self()] = false;    
+    printf("parse thread[%d] run end\n", pthread_self());
 }
 
 void* RedisClient::thread_do_cmd(void* arg)
 {
-    printf("thread[%d] run start\n", pthread_self());
+    printf("do cmd thread[%d] run start\n", pthread_self());
     pthread_detach(pthread_self());
+
+    RedisClient* client = (RedisClient*)arg;    
+
+    pthread_mutex_lock(&client->cmd_lock);
     static int thread_index = 0;
     thread_index++;
+    pthread_mutex_unlock(&client->cmd_lock);
     
     int index = thread_index;
-    RedisClient* client = (RedisClient*)arg;    
-    redisContext* context = client->clients[index -1];
     vector<string>& client_cmd =  client->client_cmd;
     vector<string> q;
     while (client->_start_thread) {
@@ -274,7 +381,7 @@ void* RedisClient::thread_do_cmd(void* arg)
         q.clear();
     }
     client->thread_state[pthread_self()] = false;
-    printf("thread[%d] run end\n", pthread_self());
+    printf("do cmd thread[%d] run end\n", pthread_self());
 }
 
 
