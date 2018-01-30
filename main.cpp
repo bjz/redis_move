@@ -217,9 +217,9 @@ int main(int argc, char **argv) {
         
     } while (rp != "0");
 
-failed:    
-    dest_client->stop_do_cmd();
+failed:
     src_client->stop_do_cmd();
+    dest_client->stop_do_cmd();
     src_client->print_time();    
     printf("total_cmd_num=%lld, keys=%lld\n", dest_client->total_cmd_num, src_client->total_keys_num);
     pthread_exit(0);
