@@ -236,8 +236,13 @@ void RedisClient::start_do_cmd(int num, bool is_dest, Client* client)
 
 void RedisClient::stop_do_cmd()
 {
+    int64_t last_cmd = 0, last_keys = 0;
     while ((!client_cmd.empty()) || (!all_keys.empty())) {
-        printf("cmd=%d, all_keys=%d\n", client_cmd.size(), all_keys.size());
+        if (last_cmd != client_cmd.size() || last_keys != all_keys.size()) {
+            printf("cmd=%d, all_keys=%d\n", client_cmd.size(), all_keys.size());
+            last_cmd = client_cmd.size();
+            last_keys = all_keys.size();
+        }
         usleep(500);
         pthread_cond_signal(&keys_cond);
         pthread_cond_signal(&cond);        
@@ -301,7 +306,7 @@ void* RedisClient::thread_parse_key(void* arg)
                     cmd = "SSCAN " + key + " " + rq + " COUNT 100";
                     //printf("sscan str=%s\n", cmd.c_str());
                     vector<string> members;
-                    printf("set rq=%s\n", rq.c_str());
+                    //printf("set rq=%s\n", rq.c_str());
                     if (REDIS_REPLY_ARRAY !=src_client->exec_cmd(index, cmd, &rq, &members, NULL)) {
                         printf("error=%s, cmd=%s\n", rq.c_str(), cmd.c_str());
                         continue;
