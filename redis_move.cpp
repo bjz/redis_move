@@ -206,8 +206,9 @@ string RedisClient::get_str(char* data, int len)
     return ss;
 }
 
-void RedisClient::start_do_cmd(int num, bool is_dest, Client* client)
+void RedisClient::start_do_cmd(int num, bool _is_dest, Client* client)
 {
+    is_dest = _is_dest;
     _start_thread = true;
     if (is_dest) {
         tid_num = num;
@@ -240,6 +241,11 @@ void RedisClient::stop_do_cmd()
     while ((!client_cmd.empty()) || (!all_keys.empty())) {
         if (last_cmd != client_cmd.size() || last_keys != all_keys.size()) {
             printf("cmd=%d, all_keys=%d\n", client_cmd.size(), all_keys.size());
+            if (is_dest) {
+                printf("dest total_cmd_num=%lld, keys=%lld\n", total_cmd_num, total_keys_num);
+            } else {
+                printf("src total_cmd_num=%lld, keys=%lld\n", total_cmd_num, total_keys_num);
+            }
             last_cmd = client_cmd.size();
             last_keys = all_keys.size();
         }

@@ -52,7 +52,7 @@ private:
     int timeout;
     int server_port;
     string setver_ip;
-
+    bool is_dest;
     std::map<int, redisContext*> clients;
     pthread_mutex_t cmd_lock;
     pthread_cond_t cond;
