@@ -242,9 +242,9 @@ void RedisClient::stop_do_cmd()
         if (last_cmd != client_cmd.size() || last_keys != all_keys.size()) {
             printf("cmd=%d, all_keys=%d\n", client_cmd.size(), all_keys.size());
             if (is_dest) {
-                printf("dest keys=%lld\n", total_cmd_num, total_keys_num);
+                printf("dest total_cmd_num=%lld\n", total_cmd_num);
             } else {
-                printf("src total_cmd_num=%lld\n", total_cmd_num, total_keys_num);
+                printf("src keys=%lld\n", total_keys_num);
             }
             last_cmd = client_cmd.size();
             last_keys = all_keys.size();
