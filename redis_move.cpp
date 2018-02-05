@@ -114,7 +114,11 @@ bool RedisClient::check_status(redisContext *ctx)
 }
 
 void RedisClient::push_cmd(string cmd)
-{
+{    
+    while (client_cmd.size() > 10000) {
+        pthread_cond_signal(&cond);
+        usleep(1000);
+    }
     pthread_mutex_lock(&cmd_lock);
     total_cmd_num++;
     client_cmd.push_back(cmd);
@@ -124,6 +128,10 @@ void RedisClient::push_cmd(string cmd)
 
 void RedisClient::push_key(std::vector<string> keys_v)
 {
+    while (keys_v.size() > 1000) {
+        pthread_cond_signal(&keys_cond);
+        usleep(1000);
+    }
     pthread_mutex_lock(&keys_lock);
     all_keys.push_back(keys_v);
     total_keys_num += keys_v.size();
