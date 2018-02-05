@@ -277,7 +277,7 @@ void RedisClient::stop_do_cmd()
 
 void* RedisClient::thread_parse_key(void* arg)
 {
-    printf("parse thread[%d] run start\n", pthread_self());
+    printf("parse thread[%lld] run start\n", pthread_self());
     pthread_detach(pthread_self());
 
     Client* client_all = (Client*)arg;
@@ -325,11 +325,20 @@ void* RedisClient::thread_parse_key(void* arg)
                         printf("error=%s, cmd=%s\n", rq.c_str(), cmd.c_str());
                         continue;
                     }
-                    for (int i = 0; i < members.size(); i++) {
-                        std::string value = members[i];
-                        string set_cmd = "SADD " + key + " " + value;
-                        dest_client->push_cmd(set_cmd);
+                    if (!members.empty()) {
+                        cmd = "SADD " + key;
+                        for (int i = 0; i < members.size(); i++) {
+                            std::string value = members[i];
+                            cmd += " ";
+                            cmd += value;
+                        }
+                        dest_client->push_cmd(cmd);
                     }
+                    //for (int i = 0; i < members.size(); i++) {
+                    //    std::string value = members[i];
+                    //    string set_cmd = "SADD " + key + " " + value;
+                    //    dest_client->push_cmd(set_cmd);
+                    //}
                 }
             } else if (respond == "string") {
                 cmd = "GET " + key;
@@ -353,12 +362,12 @@ void* RedisClient::thread_parse_key(void* arg)
     }
 
     src_client->thread_state[pthread_self()] = false;    
-    printf("parse thread[%d] run end\n", pthread_self());
+    printf("parse thread[%lld] run end\n", pthread_self());
 }
 
 void* RedisClient::thread_do_cmd(void* arg)
 {
-    printf("do cmd thread[%d] run start\n", pthread_self());
+    printf("do cmd thread[%lld] run start\n", pthread_self());
     pthread_detach(pthread_self());
 
     RedisClient* client = (RedisClient*)arg;    
@@ -400,7 +409,7 @@ void* RedisClient::thread_do_cmd(void* arg)
         q.clear();
     }
     client->thread_state[pthread_self()] = false;
-    printf("do cmd thread[%d] run end\n", pthread_self());
+    printf("do cmd thread[%lld] run end\n", pthread_self());
 }
 
 
