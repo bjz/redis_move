@@ -305,6 +305,7 @@ void* RedisClient::thread_parse_key(void* arg)
             string respond = "";
             string key = keys_v[i];
             string cmd = "TYPE " + key;
+            bool is_have_data = false;
             if ((type = src_client->exec_cmd(index, cmd, &respond, NULL, NULL)) != REDIS_REPLY_STATUS) {
                 printf("error=%s, cmd=%s\n", respond.c_str(), cmd.c_str());
                 continue;
@@ -326,6 +327,7 @@ void* RedisClient::thread_parse_key(void* arg)
                         continue;
                     }
                     if (!members.empty()) {
+                        is_have_data = true;
                         std::string str_cmd = "SADD " + key;
                         for (int i = 0; i < members.size(); i++) {
                             std::string value = members[i];
@@ -333,8 +335,6 @@ void* RedisClient::thread_parse_key(void* arg)
                             str_cmd += value;
                         }
                         dest_client->push_cmd(str_cmd);
-                    } else {
-                        printf("cmd=%s have no members\n", cmd.c_str());
                     }
                     //for (int i = 0; i < members.size(); i++) {
                     //    std::string value = members[i];
@@ -349,6 +349,7 @@ void* RedisClient::thread_parse_key(void* arg)
                     printf("error=%s, cmd=%s\n", value.c_str(), cmd.c_str());
                     continue;
                 }
+                is_have_data = true;
                 string set_cmd = "SET " + key + " " + value;
                 dest_client->push_cmd(set_cmd);
             } else if (respond == "hash") {
@@ -359,6 +360,10 @@ void* RedisClient::thread_parse_key(void* arg)
 
             } else {
 
+            }
+
+            if (!is_have_data) {
+                printf("key=%s have no members\n", key.c_str());
             }
         }        
     }
