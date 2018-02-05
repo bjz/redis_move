@@ -326,13 +326,15 @@ void* RedisClient::thread_parse_key(void* arg)
                         continue;
                     }
                     if (!members.empty()) {
-                        cmd = "SADD " + key;
+                        std::string str_cmd = "SADD " + key;
                         for (int i = 0; i < members.size(); i++) {
                             std::string value = members[i];
-                            cmd += " ";
-                            cmd += value;
+                            str_cmd += " ";
+                            str_cmd += value;
                         }
-                        dest_client->push_cmd(cmd);
+                        dest_client->push_cmd(str_cmd);
+                    } else {
+                        printf("cmd=%s have no members\n", cmd.c_str());
                     }
                     //for (int i = 0; i < members.size(); i++) {
                     //    std::string value = members[i];
