@@ -48,6 +48,7 @@ private:
     string get_str(char* data, int len);
     static void* thread_do_cmd(void* arg);
     static void* thread_parse_key(void* arg);
+    string replace_str(string src_str, string old_str, string new_str);
 private:
     int timeout;
     int server_port;
@@ -66,6 +67,7 @@ private:
     pthread_cond_t keys_cond;
     std::vector<std::vector<string> > all_keys;
 public:
+    int64_t total_valid_keys;
     int64_t total_cmd_num;
     int64_t total_keys_num;
     std::map<pthread_t, bool> thread_state;    

@@ -6,7 +6,6 @@
 #include <unistd.h>
 #include <getopt.h>
 
-
 struct option opts[] = {
     {"host1", required_argument, NULL, 's'},
     {"host2", required_argument, NULL, 'd'},
@@ -222,7 +221,8 @@ failed:
     src_client->stop_do_cmd();
     dest_client->stop_do_cmd();
     src_client->print_time();    
-    printf("total_cmd_num=%lld, keys=%lld\n", dest_client->total_cmd_num, src_client->total_keys_num);
+    printf("total_cmd_num=%lld, keys=%lld, valid_keys=%lld\n", 
+        dest_client->total_cmd_num, src_client->total_keys_num, dest_client->total_valid_keys);
     pthread_exit(0);
 }
 

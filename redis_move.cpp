@@ -19,6 +19,7 @@ RedisClient::RedisClient(string ip, int port, string _passwd, int _timeout)
     _start_thread = false;
     tid = NULL;
     tid_num = 0;
+    total_valid_keys = 0;
     total_cmd_num = 0;
     total_keys_num = 0;
     passwd = _passwd;
@@ -52,6 +53,8 @@ int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<
 {
     redisReply *reply = exec_cmd(index, cmd);
     if (!reply) {
+        redisFree(clients[index]);
+        clients[index] = create_context();
         printf("error: reply is null\n");
         return REDIS_REPLY_ERROR;
     }
@@ -65,11 +68,34 @@ int RedisClient::exec_cmd(int index, const string cmd, string* response, vector<
 redisReply* RedisClient::exec_cmd(int index, const string cmd)
 {
     redisContext *ctx = clients[index];
-    if(ctx == NULL) return NULL;
+    if(ctx == NULL) {
+        printf("error: conn context is null\n");
+        return NULL;
+    }
+    //printf("src=%s\n", cmd.c_str());
+    string t_cmd = replace_str(cmd, "%", "%%");
+    //printf("replace=%s\n", t_cmd.c_str());
 
-    redisReply *reply = (redisReply*)redisCommand(ctx, cmd.c_str());
+    redisReply *reply = (redisReply*)redisCommand(ctx, t_cmd.c_str());
 
     return reply;
+}
+
+string RedisClient::replace_str(string src_str, string old_str, string new_str)
+{
+    string ret = src_str;
+    
+    if (old_str == new_str) {
+        return ret;
+    }
+    
+    size_t pos = 0;
+    while ((pos = ret.find(old_str, pos)) != string::npos) {
+        ret = ret.replace(pos, old_str.length(), new_str);
+        pos += new_str.length();
+    }
+    
+    return ret;
 }
 
 redisContext* RedisClient::create_context()
@@ -364,6 +390,8 @@ void* RedisClient::thread_parse_key(void* arg)
 
             if (!is_have_data) {
                 printf("key=%s have no members\n", key.c_str());
+            } else {
+                __sync_fetch_and_add(&dest_client->total_valid_keys, 1);
             }
         }        
     }
