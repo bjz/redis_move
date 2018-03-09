@@ -6,6 +6,7 @@
 #include <unistd.h>
 #include <getopt.h>
 
+
 struct option opts[] = {
     {"host1", required_argument, NULL, 's'},
     {"host2", required_argument, NULL, 'd'},
